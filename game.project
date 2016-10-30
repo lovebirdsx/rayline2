@@ -2,12 +2,12 @@
 title = rayline2
 version = 0.1
 write_log = 0
-dependencies = 
-custom_resources = stages/
+dependencies =
+custom_resources = res/cards
 compress_archive = 1
 
 [bootstrap]
-main_collection = /scene/controller.collectionc
+main_collection = /test/test_set_texture.collectionc
 render = /render/fixed_aspect_ratio.renderc
 
 [input]
@@ -28,12 +28,12 @@ bundle_identifier = example.unnamed
 
 [ios]
 bundle_identifier = lovebird.rayline2
-app_icon_120x120 = 
-app_icon_180x180 = /res/icon/app_icon180x180.png
+app_icon_120x120 =
+app_icon_180x180 = /res/icon/app_icon180X180.png
 launch_image_640x1136 = /res/image/lauch_640X1136.png
 
 [library]
-include_dirs = 
+include_dirs =
 
 [sprite]
 subpixels = 0

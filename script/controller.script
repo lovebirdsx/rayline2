@@ -19,12 +19,8 @@ function on_input(self, action_id, action)
 end
 
 local _scene_msg_map = {
-	[hash('loading')] = 'loading',
 	[hash('main_menu')] = 'main_menu',
-	[hash('editor')] = 'editor',
 	[hash('normal_stage')] = 'normal_stage',
-	[hash('puzzle_stage')] = 'puzzle_stage',
-	[hash('stage_select')] = 'stage_select',
 }
 
 function on_message(self, message_id, message, sender)
