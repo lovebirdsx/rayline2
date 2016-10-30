@@ -1,0 +1,48 @@
+images {
+  image: "/res/image/arrow.png"
+}
+images {
+  image: "/res/image/bomb.png"
+}
+images {
+  image: "/res/image/icing.png"
+}
+images {
+  image: "/res/image/rope.png"
+}
+images {
+  image: "/res/image/shadow.png"
+}
+images {
+  image: "/res/image/ice.png"
+}
+images {
+  image: "/res/image/lock.png"
+}
+images {
+  image: "/res/image/chp_btn.png"
+}
+images {
+  image: "/res/image/normal.png"
+}
+images {
+  image: "/res/image/slot.png"
+}
+images {
+  image: "/res/image/diamond0.png"
+}
+images {
+  image: "/res/image/diamond1.png"
+}
+images {
+  image: "/res/image/diamond2.png"
+}
+images {
+  image: "/res/image/diamond3.png"
+}
+images {
+  image: "/res/image/touch.png"
+}
+margin: 0
+extrude_borders: 0
+inner_padding: 0

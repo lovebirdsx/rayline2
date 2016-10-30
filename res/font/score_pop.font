@@ -1,0 +1,4 @@
+font: "/res/font/consola.ttf"
+material: "/builtins/fonts/font.material"
+size: 72
+outline_width: 1.0

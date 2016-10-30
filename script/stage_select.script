@@ -1,0 +1,281 @@
+local Record = require 'lib.play.record'
+local Helper = require 'lib.common.helper'
+local PuzzleConfig = require 'lib.config.puzzle'
+local PuzzleLoader = require 'lib.play.stage.puzzle_loader'
+local PuzzleStage = require 'lib.play.stage.puzzle'
+
+go.property('test', false)
+
+local function load(self)
+    local snapshot = Helper.load_table('stage_select.save')
+    if snapshot then
+        self.chp_id = snapshot.chp_id
+    else
+        self.chp_id = 1
+    end
+
+    if self.test then
+        msg.post('gui', 'hide_reset')
+    end
+end
+
+local function save(self)
+    local snapshot = {
+        chp_id = self.chp_id
+    }
+
+    Helper.save_table('stage_select.save', snapshot)
+end
+
+local function create_stage_button(self, pos, chp_id, stg_id)
+    local record = Record.instance()
+    local locked = (not self.test and not record:is_passed(chp_id, stg_id) and not record:is_current_stg(chp_id, stg_id))
+    local props = {
+        [hash('/manager')] = {chp_id = chp_id, stg_id = stg_id, locked = locked, test = self.test}
+    }
+    local btn_ids = collectionfactory.create('factory#factory', pos, nil, props, 1)
+    return btn_ids
+end
+
+local function init_stage_buttons(self, pos)
+    local stg_count = PuzzleConfig.get_stage_count(self.chp_id)
+
+    local screen_w, screen_h = sys.get_config('display.width'), sys.get_config('display.height')
+    local buttons_w, buttons_h = 500, 720
+    local button_w, button_h = buttons_w / 2, buttons_h / 4
+
+    local start_x = (screen_w - buttons_w) / 2 + pos.x
+    local start_y = pos.y
+    local buttons = {}
+    for i = 1, stg_count do
+        local row = math.floor((i+1) / 2)
+        local col = ((i % 2 == 0) and 2 or 1)
+        local x = start_x + (button_w) * (col - 1) + button_w / 2
+        local y = start_y - (button_h) * (row - 1) - button_h / 2
+        local pos = vmath.vector3(x, y, 0)
+        local btn_ids = create_stage_button(self, pos, self.chp_id, i)
+        table.insert(buttons, {stg_id = i, btn_ids = btn_ids, pos = pos})
+    end
+
+    self.buttons = buttons
+end
+
+function init(self)
+    load(self)
+    init_stage_buttons(self, vmath.vector3(0, sys.get_config('display.height') - 80, 0))
+    msg.post('.', 'update')
+    msg.post('gui', 'set_chp', {text = self.chp_id})
+
+    msg.post('.', 'acquire_input_focus')
+    self.time = 0
+end
+
+function update(self, dt)
+    self.time = self.time + dt
+end
+
+function final(self)
+    for _, btn in ipairs(self.buttons) do
+        go.delete_all(btn.btn_ids)
+    end
+    msg.post('.', 'release_input_focus')
+end
+
+local function on_msg_update(self)
+    local record = Record.instance()
+    local chp_id = self.chp_id
+
+    for stg_id, btn in ipairs(self.buttons) do
+        local btn_manager = btn.btn_ids[hash('/manager')]
+        local url = msg.url(btn_manager)
+        url.fragment = 'script'
+
+        local locked = (not self.test and not record:is_passed(chp_id, stg_id) and not record:is_current_stg(chp_id, stg_id))
+
+        go.set(url, 'chp_id', chp_id)
+        go.set(url, 'locked', locked)
+        msg.post(url, 'update')
+
+        if not self.test and record:is_current_stg(chp_id, stg_id) then
+            msg.post('gui', 'show_touch', {pos = go.get_position(btn_manager)})
+        end
+    end
+
+    if not self.test and chp_id ~= record:get_chp_id() then
+        msg.post('gui', 'hide_touch')
+    end
+
+    msg.post('gui', 'set_chp', {text = self.chp_id})
+end
+
+local function on_msg_chp_left(self)
+    if self.chp_id > 1 then
+        self.chp_id = self.chp_id - 1
+        msg.post('.', 'update')
+        msg.post('.', 'save')
+    end
+end
+
+local function on_msg_chp_right(self)
+    record = Record.instance()
+    if self.test or self.chp_id < record:get_chp_id() then
+        if self.chp_id < PuzzleConfig.get_chp_count() then
+            self.chp_id = self.chp_id + 1
+            msg.post('.', 'update')
+            msg.post('.', 'save')
+        end
+    end
+end
+
+local function on_msg_return(self)
+    msg.post('controller:/loader', 'main_menu')
+end
+
+local function on_msg_reset(self)
+    local record = Record.instance()
+    record:reset()
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('load') then
+        load(self)
+    elseif message_id == hash('save') then
+        save(self)
+    elseif message_id == hash('update') then
+        on_msg_update(self)
+    elseif message_id == hash('chp_left') then
+        on_msg_chp_left(self)
+    elseif message_id == hash('chp_right') then
+        on_msg_chp_right(self)
+    elseif message_id == hash('return') then
+        on_msg_return(self)
+    elseif message_id == hash('reset') then
+        on_msg_reset(self)
+    end
+end
+
+local function on_select_ani_down(self, url, property)
+    if self.test then
+        msg.post('controller:/loader', 'editor')
+    else
+        msg.post('controller:/loader', 'puzzle_stage', {
+            ['/manager'] = {
+                test = false,
+            }
+        })
+    end
+end
+
+local function get_stg_id_by_pos(self, pos)
+    for stg_id, btn in ipairs(self.buttons) do
+        if vmath.length(btn.pos - pos) < 80 then
+            return stg_id
+        end
+    end
+end
+
+local function copy_stage(self, stg_id)
+    local btn = self.buttons[stg_id]
+    local pos = btn.pos + vmath.vector3(0, 0, 0.5)
+    local btn_ids = create_stage_button(self, pos, self.chp_id, stg_id)
+    return {stg_id = stg_id, chp_id = self.chp_id, btn_ids = btn_ids, pos = pos}
+end
+
+local function move_stage(self, stage, dpos)
+    for id, url in pairs(stage.btn_ids) do
+        go.set_position(go.get_position(url) + dpos, url)
+    end
+
+    local pos = go.get_position(stage.btn_ids[hash('/board')])
+
+    local D = 60
+    local HOLD_TIME = 0.8
+    if pos.x < D or pos.x > sys.get_config("display.width")  - D then
+        if not self.page_time then
+            self.page_time = self.time
+        end
+    else
+        self.page_time = nil
+    end
+
+    if self.page_time and self.time - self.page_time > HOLD_TIME then
+        if pos.x < D then
+            msg.post('.', 'chp_left')
+        else
+            msg.post('.', 'chp_right')
+        end
+
+        self.page_time = self.time
+    end
+end
+
+local function end_move_stage(self, stage, pos)
+    go.delete_all(stage.btn_ids)
+    self.selected_stage = nil
+
+    local stg_id = get_stg_id_by_pos(self, pos)
+    if stg_id then
+        local from_chp_id, from_stg_id = stage.chp_id, stage.stg_id
+        local to_chp_id, to_stg_id = self.chp_id, stg_id
+
+        if from_chp_id ~= to_chp_id or from_stg_id ~= to_stg_id then
+            local from_path = PuzzleConfig.get_stage_path(from_chp_id, from_stg_id)
+            local to_path = PuzzleConfig.get_stage_path(to_chp_id, to_stg_id)
+
+            local from_stage = PuzzleLoader.load_from_sv(from_path) or PuzzleStage()
+            local to_stage = PuzzleLoader.load_from_sv(to_path) or PuzzleStage()
+
+            PuzzleLoader.save_to_sv(from_path, to_stage)
+            PuzzleLoader.save_to_sv(to_path, from_stage)
+
+            msg.post('.', 'update')
+        end
+    end
+end
+
+function on_input(self, action_id, action)
+    if action_id == hash('touch') then
+        if action.pressed then
+            self.press_time = self.time
+        end
+
+        if not self.selected_stage then
+            if action.repeated and (self.time - self.press_time > 0.01) then
+                local pos = Helper.action_to_pos(action)
+                local stg_id = get_stg_id_by_pos(self, pos)
+                if stg_id then
+                    self.selected_stage = copy_stage(self, stg_id)
+                    return true
+                end
+            end
+        else
+            if not action.released then
+                local dpos = Helper.action_to_dpos(action)
+                move_stage(self, self.selected_stage, dpos)
+            else
+                local pos = Helper.action_to_pos(action)
+                end_move_stage(self, self.selected_stage, pos)
+            end
+
+            return true
+        end
+
+        if action.released then
+            local pos = Helper.action_to_pos(action)
+            local stg_id = get_stg_id_by_pos(self, pos)
+            if stg_id then
+                local record = Record.instance()
+                if not self.test and not record:can_play(self.chp_id, stg_id) then
+                    return true
+                end
+
+                record:set_select_chp_id(self.chp_id)
+                record:set_select_stg_id(stg_id)
+                local board = self.buttons[stg_id].btn_ids[hash('/board')]
+                local scale = go.get(board, 'scale') * 1.2
+                go.animate(board, 'scale', go.PLAYBACK_ONCE_PINGPONG, scale, go.EASING_OUTBOUNCE, 0.2, 0, on_select_ani_down)
+                return true
+            end
+        end
+    end
+end

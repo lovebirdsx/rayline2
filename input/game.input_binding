@@ -1,0 +1,28 @@
+key_trigger {
+  input: KEY_ESC
+  action: "exit"
+}
+key_trigger {
+  input: KEY_ENTER
+  action: "debug"
+}
+mouse_trigger {
+  input: MOUSE_BUTTON_LEFT
+  action: "touch"
+}
+key_trigger {
+  input: KEY_BACKSPACE
+  action: "backspace"
+}
+mouse_trigger {
+  input: MOUSE_BUTTON_1
+  action: "touch"
+}
+text_trigger {
+  input: TEXT
+  action: "text"
+}
+text_trigger {
+  input: MARKED_TEXT
+  action: "marked_text"
+}

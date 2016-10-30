@@ -1,0 +1,66 @@
+local class = require 'lib.common.class'
+local Base = require 'lib.play.condition.base'
+local Type = require 'lib.play.condition.type'
+local HexType = require 'lib.play.hex.type'
+
+local ClearIce = class(Base, function (self, params)
+	params = params or {}
+	Base.init(self, params)
+end)
+
+function ClearIce:bind(stage)
+	self.stage = stage
+	self.max_count = stage:get_board():get_hex_count_by_type(HexType.Ice)
+end
+
+function ClearIce:is_bind()
+	return self.stage ~= nil
+end
+
+function ClearIce:get_type()
+	return Type.ClearIce
+end
+
+function ClearIce:get_type_string()
+	return Type.tostring(self:get_type())
+end
+
+function ClearIce:get_filed_names()
+	return {}
+end
+
+function ClearIce:gen_snapshot()
+	return nil
+end
+
+function ClearIce:apply_snapshot(s)
+
+end
+
+function ClearIce:is_equal(other)
+	return self:get_type() == other:get_type()
+end
+
+function ClearIce:tostring()
+	return 'Clear Ice'
+end
+
+function ClearIce:get_status_string()
+	assert(self:is_bind())
+	local board = self.stage:get_board()
+	return ('Clear Ice (%d / %d)'):format(self.max_count - board:get_hex_count_by_type(HexType.Ice), self.max_count)
+end
+
+function ClearIce:is_ok()
+	assert(self:is_bind())
+	local inserter, board = self.stage:get_inserter(), self.stage:get_board()
+	return inserter:get_block_count() >= 0 and board:get_hex_count_by_type(HexType.Ice) == 0
+end
+
+function ClearIce:is_failed()
+	assert(self:is_bind())
+	local inserter, board = self.stage:get_inserter(), self.stage:get_board()
+	return inserter:get_block_count() == 0 and board:get_hex_count_by_type(HexType.Ice) > 0
+end
+
+return ClearIce

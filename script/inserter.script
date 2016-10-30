@@ -1,0 +1,234 @@
+local Config  = require 'lib.config.base'
+local Helper = require 'lib.common.helper'
+local Inserter = require 'lib.play.inserter.inserter'
+
+go.property('width', 600)
+go.property('height', 300)
+
+local function get_scale(self)
+    return Config.BlockHexScale
+end
+
+local function get_start_pos(self, pos_id)
+    local block_w = self.width / self.inserter:get_block_count()
+    return vmath.vector3(- self.width / 2 + block_w / 2 + (pos_id - 1) * block_w, 0, 0)
+end
+
+local function get_start_world_pos(self, pos_id)
+    return get_start_pos(self, pos_id) + go.get_position()
+end
+
+local function create_block(self, pos_id, block, d_pos)
+    local pos = get_start_world_pos(self, pos_id)
+    if d_pos then
+        pos = pos + d_pos
+    end
+
+    local block_go = factory.create('#factory', pos, nil, {shadow = false}, get_scale(self))
+    msg.post(block_go, 'set_parent', {parent_id = go.get_id()})
+    msg.post(block_go, 'bind', {id = Helper.push_table(block)})
+    return block_go
+end
+
+local function bind(self, inserter)
+    self.go_blocks = {}
+    self.inserter = inserter
+
+    for i = 1, inserter:get_block_count() do
+        local block_go = create_block(self, i, inserter:get_block(i))
+        self.go_blocks[i] = block_go
+    end
+end
+
+local function release(self)
+    for _, go_block in ipairs(self.go_blocks) do
+        go.delete(go_block)
+    end
+end
+
+function init(self)
+    bind(self, Inserter())
+    self.time = 0
+end
+
+function update(self, dt)
+    self.time = self.time + dt
+end
+
+function final(self)
+    release(self)
+end
+
+local function on_bind(self, message)
+    release(self)
+    bind(self, Helper.pop_table(message.id))
+end
+
+local function on_block_enter_finish(self, url, property)
+    -- msg.post('manager', 'check_gameover')
+end
+
+local function on_locate_succeed(self)
+    go.delete(self.selected_block)
+    local id = self.selected_block_id
+
+    if self.inserter:get_need_refill() then
+        local block = self.inserter:refill(id)
+        self.go_blocks[id] = create_block(self, id, block, vmath.vector3(0, -200, 0))
+        local pos = get_start_pos(self, id)
+        go.animate(self.go_blocks[id], 'position', go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_LINEAR, 0.2, 0, on_block_enter_finish)
+    else
+        table.remove(self.go_blocks, id)
+        self.inserter:remove(id)
+        if self.inserter:get_block_count() > 0 then
+            local scale = get_scale(self)
+            for i = 1, self.inserter:get_block_count() do
+                local pos = get_start_pos(self, i)
+                go.animate(self.go_blocks[i], 'scale', go.PLAYBACK_ONCE_FORWARD, scale, go.EASING_LINEAR, 0.2)
+                if i == 1 then
+                    go.animate(self.go_blocks[i], 'position', go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_LINEAR, 0.2, 0, on_block_enter_finish)
+                else
+                    go.animate(self.go_blocks[i], 'position', go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_LINEAR, 0.2)
+                end
+            end
+        else
+            -- msg.post('manager', 'check_gameover')
+        end
+    end
+
+    self.selected_block = nil
+end
+
+local function on_block_move_back_finish(self, url, property)
+    self.selected_block = nil
+end
+
+local function on_locate_failed(self)
+    msg.post(self.selected_block, 'size_down')
+    msg.post(self.selected_block, 'remove_shadow')
+    go.cancel_animations(self.selected_block, 'position')
+    go.animate(self.selected_block, 'position', go.PLAYBACK_ONCE_FORWARD, self.move_start_pos, go.EASING_LINEAR, 0.2, 0, on_block_move_back_finish)
+end
+
+local function get_select_block(self, pos)
+    local block_width = self.width / self.inserter:get_block_count()
+    local block_height = self.height
+    local px, py = pos.x, pos.y
+    for i, block in ipairs(self.go_blocks) do
+        local block_pos = go.get_position(block)
+        local bx, by = block_pos.x, block_pos.y
+        if      px >= bx - block_width / 2
+            and px <= bx + block_width / 2
+            and py >= by - block_height / 2
+            and py <= by + block_height / 2 then
+            return block, i
+        end
+    end
+end
+
+local function on_select(self, pos)
+    local block, block_id = get_select_block(self, pos)
+    if block then
+        self.selected_block = block
+        self.selected_block_id = block_id
+        self.move_start_pos = go.get_position(block)
+
+        -- move up in mobile system
+        if not Helper.is_pc() then
+            local y = self.move_start_pos.y
+            local d = 100
+            if pos.y < y - d then
+                pos.y = y
+            elseif pos.y > y + d then
+                pos.y = pos.y + d
+            else
+                pos.y = y + (pos.y - y + d)
+            end
+        end
+
+        pos.z = pos.z + 0.1
+
+        msg.post(block, 'size_up')
+        msg.post(block, 'add_shadow')
+
+        go.cancel_animations(self.selected_block, 'position')
+        go.animate(self.selected_block, 'position', go.PLAYBACK_ONCE_FORWARD, pos, go.EASING_LINEAR, 0.2)
+        self.move_target_pos = pos
+        self.move_start_time = self.time
+    end
+end
+
+local function on_move(self, d_pos)
+    if self.time - self.move_start_time >= 0.2 then
+        go.set_position(go.get_position(self.selected_block) + d_pos, self.selected_block)
+    else
+        self.move_target_pos = self.move_target_pos + d_pos
+        local t = 0.2 - (self.time - self.move_start_time)
+        go.cancel_animations(self.selected_block, 'position')
+        go.animate(self.selected_block, 'position', go.PLAYBACK_ONCE_FORWARD, self.move_target_pos, go.EASING_LINEAR, t)
+    end
+    local block = self.inserter:get_block(self.selected_block_id)
+    local center_offset = Helper.get_block_center_offset(block, go.get_scale(self.selected_block))
+    msg.post('board', 'move_block', {
+        block_id = Helper.push_table(block),
+        pos = go.get_world_position(self.selected_block) + center_offset
+    })
+end
+
+local function on_touch(self, message)
+    local action = message.action
+    if not self.selected_block then
+        if action.pressed then
+            local self_pos = go.get_position()
+            local pos = Helper.action_to_pos(action)
+            pos.z = self_pos.z
+            on_select(self, pos - self_pos)
+        end
+    else
+        if action.released then
+            msg.post('board', 'locate_block')
+        else
+            local dpos = Helper.action_to_dpos(action)
+            on_move(self, dpos)
+        end
+    end
+end
+
+local function on_try_select_block(self, message, sender)
+    local pos = message.pos - go.get_position()
+    local block, block_id = get_select_block(self, pos)
+    if block then
+        msg.post(sender, 'try_select_block_ok', {block = block, block_id = block_id})
+    end
+end
+
+local function on_change_block(self, message)
+    local id, block = message.id, Helper.pop_table(message.block_id)
+    go.delete(self.go_blocks[id])
+    self.go_blocks[id] = create_block(self, id, block)
+    self.inserter:set(id, block)
+end
+
+local function on_debug(self)
+    for _, block_go in ipairs(self.go_blocks) do
+        msg.post(block_go, 'debug')
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('bind') then
+        on_bind(self, message)
+    elseif message_id == hash('locate_succeed') then
+        on_locate_succeed(self)
+    elseif message_id == hash('locate_failed') then
+        on_locate_failed(self)
+    elseif message_id == hash('touch') then
+        on_touch(self, message)
+    elseif message_id == hash('try_select_block') then
+        on_try_select_block(self, message, sender)
+    elseif message_id == hash('change_block') then
+        on_change_block(self, message)
+    elseif message_id == hash('debug') then
+        on_debug(self)
+    end
+end

@@ -1,20 +1,47 @@
 [project]
-title = My project
+title = rayline
 version = 0.1
+write_log = 0
+dependencies = 
+custom_resources = stages/
+compress_archive = 1
 
 [bootstrap]
-main_collection = /main/main.collectionc
+main_collection = /scene/controller.collectionc
+render = /render/fixed_aspect_ratio.renderc
 
 [input]
 game_binding = /input/game.input_bindingc
 
 [display]
-width = 1280
-height = 720
+width = 640
+height = 960
+fullscreen = 0
+variable_dt = 0
+dynamic_orientation = 0
 
-[physics]
-scale = 0.02
+[tracking]
+app_id = lovebird.rayline
+
+[osx]
+bundle_identifier = example.unnamed
+
+[ios]
+bundle_identifier = lovebird.rayline
+app_icon_120x120 = 
+app_icon_180x180 = /res/icon/app_icon180x180.png
+launch_image_640x1136 = /res/image/lauch_640X1136.png
+
+[library]
+include_dirs = 
+
+[sprite]
+subpixels = 0
+max_count = 2048
 
 [script]
 shared_state = 1
+
+[windows]
+app_icon = /res/icon/app_icon180x180.png
 

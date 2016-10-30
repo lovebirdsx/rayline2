@@ -1,0 +1,50 @@
+local Config = require 'lib.config.base'
+
+function init(self)
+	go.set('#sprite', 'scale', vmath.vector3(Config.HexScale, Config.HexScale, 1))
+	go.set('#ani', 'scale', vmath.vector3(2, 2, 1))
+
+	msg.post('#ani', 'disable')
+end
+
+local function on_bomb_prepare_done(self, url, property)
+	self.is_animating = false
+	sprite.set_constant('#sprite', 'tint', vmath.vector4(1,1,1,1))
+	msg.post(self.access_event_sender, 'access_event_response')
+end
+
+local function on_animation_done(self)
+	self.is_animating = false
+	msg.post('#ani', 'disable')
+	msg.post(self.access_event_sender, 'access_event_response')
+end
+
+local function on_access_event(self, message, sender)
+	if self.is_animating then
+		msg.post(sender, 'access_event_response')
+		return
+	end
+
+	self.access_event_sender = sender
+	local ev_type = message.type
+	if ev_type == 'bomb_prepare'then
+		go.animate('#sprite', 'tint', go.PLAYBACK_ONCE_PINGPONG, vmath.vector4(0.5, 0.5, 0.5,1), go.EASING_LINEAR, 0.4)
+		go.animate('#sprite', 'tint', go.PLAYBACK_ONCE_PINGPONG, vmath.vector4(0.5, 0.5, 0.5,1), go.EASING_LINEAR, 0.4, 0.4, on_bomb_prepare_done)
+		self.is_animating = true
+	elseif ev_type == 'bomb' then
+		msg.post('#sprite', 'disable')
+		msg.post('#ani', 'enable')
+		msg.post('#ani', 'play_animation', {id = hash('anim')})
+		self.is_animating = true
+	else
+		msg.post(sender, 'access_event_response')
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('access_event_request') then
+		on_access_event(self, message, sender)
+	elseif message_id == hash('animation_done') then
+		on_animation_done(self)
+	end
+end

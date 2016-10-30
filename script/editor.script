@@ -1,0 +1,290 @@
+require 'lib.common.table'
+
+local Helper = require 'lib.common.helper'
+local Config = require 'lib.config.base'
+local PuzzleConfig = require 'lib.config.puzzle'
+local PuzzleLoader = require 'lib.play.stage.puzzle_loader'
+local PuzzleStage = require 'lib.play.stage.puzzle'
+local HexPropsMgr = require 'lib.play.hex.propsmgr'
+local Record = require 'lib.play.record'
+
+go.property('test_path', hash('puzzle_test.save'))
+
+Helper.reg_str('puzzle_test.save')
+
+local function load_editor_config(self)
+	local record = Record.instance()
+	self.chp_id = record:get_select_chp_id()
+	self.stg_id = record:get_select_stg_id()
+
+	local snapshot = Helper.load_table('editor.save')
+	local hex_props_mgr = HexPropsMgr()
+	if snapshot then
+		self.server_ip = snapshot.server_ip
+		self.server_port = snapshot.server_port
+		hex_props_mgr:apply_snapshot(snapshot.hex_props_mgr)
+	else
+		self.server_ip = Config.FSIP
+		self.server_port = Config.FSPort
+	end
+
+	self.hex_props_mgr = hex_props_mgr
+end
+
+local function save_editor_config(self)
+	local snapshot = {
+		stg_id_record = self.stg_id_record,
+		server_ip = self.server_ip,
+		server_port = self.server_port,
+		hex_props_mgr = self.hex_props_mgr:gen_snapshot()
+	}
+	Helper.save_table('editor.save', snapshot)
+end
+
+function init(self)
+	load_editor_config(self)
+    msg.post('gui', 'bind_hex_props_mgr', {id = Helper.push_table(self.hex_props_mgr)})
+
+	msg.post('selector', 'disable')
+	msg.post('condition_editor', 'disable')
+	msg.post('inserter_editor', 'disable')
+	msg.post('hex_props_editor', 'disable')
+	msg.post('server_ip_editor', 'disable')
+	msg.post('board_size_editor', 'disable')
+
+	self.gui_position = go.get_position('gui')
+	self.board_position = go.get_position('board')
+	self.inserter_position = go.get_position('inserter')
+	self.selector_position = go.get_position('selector')
+
+	msg.post('gui', 'set_chp_text', {text = self.chp_id .. ':' .. PuzzleConfig.get_name(self.chp_id)})
+	msg.post('gui', 'set_stg_text', {text = PuzzleConfig.get_stage_file(self.chp_id, self.stg_id)})
+	msg.post('.', 'load')
+
+	msg.post('.', 'acquire_input_focus')
+	msg.post('gui', 'acquire_input_focus')
+	msg.post('selector', 'acquire_input_focus')
+	msg.post('condition_editor', 'acquire_input_focus')
+	msg.post('inserter_editor', 'acquire_input_focus')
+	msg.post('hex_props_editor', 'acquire_input_focus')
+	msg.post('server_ip_editor', 'acquire_input_focus')
+	msg.post('board_size_editor', 'acquire_input_focus')
+end
+
+function final(self)
+	save_editor_config(self)
+
+	msg.post('.', 'release_input_focus')
+	msg.post('gui', 'release_input_focus')
+	msg.post('selector', 'release_input_focus')
+	msg.post('condition_editor', 'release_input_focus')
+	msg.post('inserter_editor', 'release_input_focus')
+	msg.post('hex_props_editor', 'release_input_focus')
+	msg.post('server_ip_editor', 'release_input_focus')
+	msg.post('board_size_editor', 'release_input_focus')
+end
+
+local function on_load(self)
+	local path = PuzzleConfig.get_stage_path(self.chp_id, self.stg_id)
+    local stage = PuzzleLoader.load_from_sv(path)
+    if stage then
+    	print(string.format('load stage from sv: %s ok', path))
+    else
+    	stage = PuzzleStage()
+    	print(string.format('load stage form sv: %s faild', path))
+    end
+
+    msg.post('board', 'bind', {id = Helper.push_table(stage:get_board())})
+    msg.post('inserter', 'bind', {id = Helper.push_table(stage:get_inserter())})
+    msg.post('selector', 'bind_policy', {id = Helper.push_table(stage:get_inserter():get_policy())})
+    msg.post('gui', 'show_conditions', {text = stage:get_condition_manager():tostring()})
+    msg.post('gui', 'show_inserter', {text = stage:get_inserter():tostring()})
+    msg.post('gui', 'show_server_ip', {text = self.server_ip .. ':' .. self.server_port})
+
+    self.stage = stage
+end
+
+local function on_save(self, message)
+	local path = PuzzleConfig.get_stage_path(self.chp_id, self.stg_id)
+	PuzzleLoader.save_to_sv(path, self.stage)
+end
+
+local function on_sync(self)
+	local sync_ok, err = PuzzleLoader.sync(self.server_ip, self.server_port)
+	if sync_ok then
+		msg.post('gui', 'status', {text = 'sync to server ok'})
+		msg.post('.', 'load')
+	else
+		msg.post('gui', 'status', {text = 'sync to server failed: ' .. err})
+	end
+end
+
+local function on_test(self)
+	msg.post('.', 'save')
+
+	Helper.save_table(self.test_path, self.stage:gen_snapshot())
+	msg.post('controller:/loader', 'puzzle_stage', {
+		['/manager'] = {test = true}
+	})
+end
+
+local function hide_main_interface(self)
+	local screen_w = sys.get_config('display.width')
+	local offset = vmath.vector3(screen_w, 0, 0)
+	msg.post('gui', 'disable')
+	go.set_position(self.board_position + offset, 'board')
+	go.set_position(self.inserter_position + offset, 'inserter')
+end
+
+local function show_main_interface(self)
+	msg.post('gui', 'enable')
+	go.set_position(self.board_position , 'board')
+	go.set_position(self.inserter_position, 'inserter')
+end
+
+local function on_try_selecte_block_ok(self, message)
+	hide_main_interface(self)
+
+	local screen_w = sys.get_config('display.width')
+	local offset = vmath.vector3(screen_w, 0, 0)
+	go.set_position(self.selector_position - offset, 'selector')
+	self.select_block_id = message.block_id
+	msg.post('selector', 'enable')
+end
+
+local function on_select_block_type(self, message)
+	go.set_position(self.selector_position, 'selector')
+	msg.post('selector', 'disable')
+	msg.post('inserter', 'change_block', {id = self.select_block_id, block_id = message.block_id})
+
+	show_main_interface(self)
+end
+
+local function on_show_condition_editor(self)
+	hide_main_interface(self)
+	msg.post('condition_editor', 'enable')
+	msg.post('condition_editor', 'bind', {id = Helper.push_table(self.stage:get_condition_manager())})
+end
+
+local function on_finish_edit_conditions(self)
+	show_main_interface(self)
+	msg.post('condition_editor', 'disable')
+	msg.post('gui', 'show_conditions', {text = self.stage:get_condition_manager():tostring()})
+	msg.post('.', 'save')
+end
+
+local function on_show_inserter_editor(self)
+	hide_main_interface(self)
+	msg.post('inserter_editor', 'enable')
+	msg.post('inserter_editor', 'bind', {id = Helper.push_table(self.stage:get_inserter())})
+end
+
+local function on_finish_edit_inserter(self)
+	show_main_interface(self)
+	msg.post('inserter_editor', 'disable')
+	msg.post('inserter', 'bind', {id = Helper.push_table(self.stage:get_inserter())})
+	msg.post('selector', 'update')
+	msg.post('gui', 'show_inserter', {text = self.stage:get_inserter():tostring()})
+	msg.post('.', 'save')
+end
+
+function on_show_hex_prop_editor(self)
+	if self.hex_props_mgr:get_selected_props():get_count() > 0 then
+		hide_main_interface(self)
+		msg.post('hex_props_editor', 'enable')
+		msg.post('hex_props_editor', 'bind', {id = Helper.push_table(self.hex_props_mgr:get_selected_props())})
+	end
+end
+
+function on_finish_edit_hex_prop(self)
+	show_main_interface(self)
+	msg.post('hex_props_editor', 'disable')
+	msg.post('gui', 'update')
+	save_editor_config(self)
+end
+
+function on_show_server_ip_editor(self)
+	hide_main_interface(self)
+	msg.post('server_ip_editor', 'enable')
+	msg.post('server_ip_editor', 'bind', {ip = self.server_ip})
+end
+
+function on_finish_edit_server_ip(self, message)
+	show_main_interface(self)
+	self.server_ip = message.ip
+	msg.post('server_ip_editor', 'disable')
+	msg.post('gui', 'show_server_ip', {text = self.server_ip .. ':' .. self.server_port})
+	save_editor_config(self)
+end
+
+function on_show_board_size_editor(self)
+	hide_main_interface(self)
+	msg.post('board_size_editor', 'enable')
+	msg.post('board_size_editor', 'bind', {size = self.stage:get_board():get_size()})
+end
+
+function on_finish_edit_board_size(self, message)
+	show_main_interface(self)
+	msg.post('board_size_editor', 'disable')
+	msg.post('board', 'resize', message)
+	msg.post('.', 'save')
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('try_select_block_ok') then
+		on_try_selecte_block_ok(self, message)
+	elseif message_id == hash('select_block_type') then
+		on_select_block_type(self, message)
+	elseif message_id == hash('load') then
+		on_load(self)
+	elseif message_id == hash('save') then
+		on_save(self, message)
+	elseif message_id == hash('sync') then
+		on_sync(self)
+	elseif message_id == hash('test') then
+		on_test(self)
+    elseif message_id == hash('chp_left') then
+    	on_chp_left(self, message)
+    elseif message_id == hash('chp_right') then
+    	on_chp_right(self, message)
+    elseif message_id == hash('stg_left') then
+    	on_stg_left(self, message)
+    elseif message_id == hash('stg_right') then
+    	on_stg_right(self, message)
+    elseif message_id == hash('show_condition_editor') then
+    	on_show_condition_editor(self)
+    elseif message_id == hash('finish_edit_conditions') then
+    	on_finish_edit_conditions(self)
+    elseif message_id == hash('show_inserter_editor') then
+    	on_show_inserter_editor(self)
+    elseif message_id == hash('finish_edit_inserter') then
+    	on_finish_edit_inserter(self)
+    elseif message_id == hash('show_hex_prop_editor') then
+    	on_show_hex_prop_editor(self)
+    elseif message_id == hash('finish_edit_hex_prop') then
+    	on_finish_edit_hex_prop(self)
+    elseif message_id == hash('show_server_ip_editor') then
+    	on_show_server_ip_editor(self)
+    elseif message_id == hash('finish_edit_server_ip') then
+    	on_finish_edit_server_ip(self, message)
+	elseif message_id == hash('show_board_size_editor') then
+    	on_show_board_size_editor(self)
+    elseif message_id == hash('finish_edit_board_size') then
+    	on_finish_edit_board_size(self, message)
+	end
+end
+
+function on_debug(self)
+
+end
+
+function on_input(self, action_id, action)
+	if action_id == hash('debug') and action.pressed then
+		on_debug(self)
+	end
+
+	if action_id == hash('touch') and action.pressed then
+		local pos = vmath.vector3(action.x, action.y, 0)
+		msg.post('inserter', 'try_select_block', {pos = pos})
+	end
+end

@@ -1,0 +1,71 @@
+- [x] bug: rover stages board size not correct
+- [x] bug: can not move block while puzzle stage passed
+- [x] bug: restart condition while stage restart
+- [x] bug: adpter to different screen size : https://github.com/britzl/publicexamples/tree/master/examples/fixed_aspect_ratio
+- [x] optimize: block scale
+- [x] optimize: stage swaper
+- [ ] bug: normal 4 game over detection
+- [ ] design: explotion !!!!
+- [ ] design: conditon optimize: has force attr
+- [ ] design: game over reason
+- [ ] button
+- [ ] ani
+- [ ] sound
+
+- [x] diamond contain more score
+- [x] can not move block while normal stage failed
+- [x] block pos incorrect
+- [x] score add ani
+- [x] score ani
+- [x] block pos optimize
+- [x] ios block position
+- [x] conditon optimize
+- [x] test editor
+
+- [x] simple inserter
+	- [x] rem inserter.base
+	- [x] rem inserter.factory
+	- [x] rem block.base
+	- [x] rem block.factory
+	- [x] rem block.type
+	- [x] inserter.type is support different block collections
+	- [x] block can create block_ids by human readable class ids
+
+- [x] score
+
+- [x] simple hex design
+- [x] color scheme
+- [x] collect diamonds
+- [x] puzzle mode
+- [x] arrow hex editor support
+- [x] arrow explotion ani scale
+- [x] arrow k
+- [x] arrow explotion ani time
+- [x] change normal block to block
+- [x] add stage condition
+- [x] add arrow hex
+- [x] add icing hex
+- [x] access input stack
+- [x] del normal hex while arrowup
+- [x] add status bar
+- [x] add level saver
+- [x] add ice hex ani
+- [x] add bomb hex ani
+- [x] block selector
+- [x] stage test
+- [x] stage loader & saver
+- [x] snapshot bug
+- [x] create editor
+- [x] add unit test
+
+IF hues do not equal each other
+	set saturations to match each other
+	set brightnesses to match each other
+
+ELSE IF saturations do not equal each other
+	set hues to match each other
+	set brightnesses to match each other
+
+ELSE IF brightnesses do not equal each other
+	set hues to equal each other
+	set saturations to equal each other

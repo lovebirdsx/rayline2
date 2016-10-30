@@ -1,0 +1,132 @@
+local Config = require 'lib.config.base'
+
+go.property('color_id', 0)
+go.property('tied_up', false)
+
+local LINEUP_TIME = 0.8
+local LINEUP_INTERVAL = 0.4
+
+function init(self)
+	local color_id
+	if self.color_id <= 0 or self.color_id > Config.MaxHexColorId then
+		color_id = math.random(1, Config.MaxHexColorId)
+	else
+		color_id = self.color_id
+	end
+
+	self.color = vmath.vector4(Config.HexColors[color_id])
+    sprite.set_constant('#sprite', 'tint', self.color)
+	go.set('#sprite', 'scale', vmath.vector3(Config.HexScale, Config.HexScale, 1))
+	go.set('#rope', 'scale', vmath.vector3(Config.HexScale, Config.HexScale, 1))
+	go.set('#shadow', 'scale', vmath.vector3(Config.HexScale * 1.2, Config.HexScale * 1.2, 1))
+
+	if not self.tied_up then
+		msg.post('#rope', 'disable')
+	end
+
+	msg.post('#shadow', 'disable')
+
+	self.state = 'normal'
+end
+
+function update(self, dt)
+	if self.state == 'lineup' then
+		self.time = self.time + dt
+		if self.time > LINEUP_TIME then
+			if self.tied_up then
+				self.tied_up = false
+				msg.post('#rope', 'disable')
+				go.set('#sprite', 'tint', self.color)
+				self.state = 'normal'
+			else
+				msg.post('#sprite', 'disable')
+				self.state = 'over'
+			end
+
+			msg.post(self.access_event_sender, 'access_event_response')
+		else
+			local da = dt / LINEUP_INTERVAL * self.lineup_dir
+			local a = self.color_w + da
+
+			if self.lineup_dir > 0 then
+				if a > 1 then
+					a = -(a - 1)
+					self.lineup_dir = -1
+				end
+			else
+				if a < 0 then
+					a = -a
+					self.lineup_dir = 1
+				end
+			end
+
+			self.color_w = a
+
+			local c = vmath.vector4(self.color)
+			c.x = (1 - c.x / 2) * self.color_w + c.x / 2
+			c.y = (1 - c.y / 2) * self.color_w + c.y / 2
+			c.z = (1 - c.z / 2) * self.color_w + c.z / 2
+			go.set('#sprite', 'tint', c)
+		end
+	elseif self.state == 'arrowup' then
+		self.time = self.time + dt
+		if self.time > 0.2 then
+			if self.tied_up then
+				msg.post('#rope', 'disable')
+				go.set('#sprite', 'tint', self.color)
+				self.state = 'normal'
+				self.tied_up = false
+			else
+				msg.post('#sprite', 'disable')
+				self.state = 'over'
+			end
+			msg.post(self.access_event_sender, 'access_event_response')
+		end
+	end
+end
+
+local function on_access_event(self, message, sender)
+	if self.state ~= 'normal' then
+		msg.post(sender, 'access_event_response')
+		return
+	end
+
+	self.access_event_sender = sender
+	self.time = 0
+
+	local ev_type = message.type
+	if ev_type == 'lineup' then
+		self.lineup_dir = -1
+		self.color_w = 1
+		self.state = 'lineup'
+	elseif ev_type == 'arrowup' then
+		self.state = 'arrowup'
+	else
+		msg.post(sender, 'access_event_response')
+	end
+end
+
+local function on_set_alpha(self, message)
+	self.color.w = message.alpha
+	sprite.set_constant('#sprite', 'tint', self.color)
+end
+
+local function on_add_shadow(self)
+	msg.post('#shadow', 'enable')
+end
+
+local function on_remove_shadow(self)
+	msg.post('#shadow', 'disable')
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('access_event_request') then
+		on_access_event(self, message, sender)
+	elseif message_id == hash('set_alpha') then
+		on_set_alpha(self, message)
+	elseif message_id == hash('add_shadow') then
+		on_add_shadow(self)
+	elseif message_id == hash('remove_shadow') then
+		on_remove_shadow(self)
+	end
+end

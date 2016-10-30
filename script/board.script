@@ -1,0 +1,404 @@
+local Board = require 'lib.play.board'
+local HexType = require 'lib.play.hex.type'
+local HexFactory = require 'lib.play.hex.factory'
+local Config = require 'lib.config.base'
+local Score = require 'lib.play.score'
+local Helper = require 'lib.common.helper'
+
+local HEX_FACTORY_MAP = {
+    [HexType.Empty] = '#empty_hex_factory',
+    [HexType.Normal] = '#normal_hex_factory',
+    [HexType.Ice] = '#ice_hex_factory',
+    [HexType.Icing] = '#icing_hex_factory',
+    [HexType.Bomb] = '#bomb_hex_factory',
+    [HexType.Arrow] = '#arrow_hex_factory',
+    [HexType.Diamond] = '#diamond_hex_factory',
+}
+
+local DETECT_RADIUS = (Config.HexWidth + Config.HexHeight) / 3
+
+local function get_hex_pos(self, x, y)
+    local scale = go.get_scale('board')
+    local self_pos = go.get_position()
+    local sx, sy, sz = self_pos.x, self_pos.y, self_pos.z
+    local w = math.floor(Config.HexWidth / 2 * scale)
+    local h = math.floor(Config.HexHeight / 2 * scale)
+    return vmath.vector3(w * x + sx, h * y + sy, sz)
+end
+
+local function create_empty_hex(self, x, y)
+    local pos = get_hex_pos(self, x, y)
+    pos.z = pos.z - 0.1
+    local bottom_hex = factory.create('#empty_hex_factory', pos, nil, {})
+    msg.post(bottom_hex, 'set_parent', {parent_id = go.get_id()})
+    return bottom_hex
+end
+
+local function set_hex(self, logic_hex, x, y)
+    if not self.hex_infos[y] then
+        self.hex_infos[y] = {}
+    end
+
+    if not self.hex_infos[y][x] then
+        self.hex_infos[y][x] = {x = x, y = y}
+    end
+
+    -- delete if exist
+    if self.hex_infos[y][x].go then
+        go.delete(self.hex_infos[y][x].go)
+        self.hex_infos[y][x].go = nil
+    end
+
+    if logic_hex:get_type() ~= HexType.Empty then
+        local hex_factory = HEX_FACTORY_MAP[logic_hex:get_type()]
+        local pos = get_hex_pos(self, x, y)
+        local hex = factory.create(hex_factory, pos, nil, logic_hex:get_properties())
+        msg.post(hex, 'set_parent', {parent_id = go.get_id()})
+
+        self.hex_infos[y][x].go = hex
+    end
+
+    if not self.buttom_hexs[y] then
+        self.buttom_hexs[y] = {}
+    end
+
+    if not self.buttom_hexs[y][x] then
+        self.buttom_hexs[y][x] = create_empty_hex(self, x, y)
+    end
+end
+
+-- only use to del hex while bind to small board size
+local function del_hex(self, x, y)
+    if self.hex_infos[y][x].go then
+        go.delete(self.hex_infos[y][x].go)
+    end
+
+    self.hex_infos[y][x] = nil
+
+    if self.buttom_hexs[y][x] then
+        go.delete(self.buttom_hexs[y][x])
+        self.buttom_hexs[y][x] = nil
+    end
+end
+
+local function has_hex(self, x, y)
+    return self.buttom_hexs[y] and self.buttom_hexs[y][x]
+end
+
+function init(self)
+    self.board = Board(self.size)
+
+    self.hex_infos = {}
+    self.buttom_hexs = {}
+    self.board:foreach_hex_slot(function (s)
+        local x, y, hex = s.x, s.y, s.hex
+        if not self.hex_infos[y] then
+            self.hex_infos[y] = {}
+            self.buttom_hexs[y] = {}
+        end
+        self.hex_infos[y][x] = {x = x, y = y}
+        self.buttom_hexs[y][x] = create_empty_hex(self, x, y)
+    end)
+end
+
+function final(self)
+    for y, hex_infos in pairs(self.hex_infos) do
+        for x, hex_info in pairs(hex_infos) do
+            if self.buttom_hexs[y][x] then
+                go.delete(self.buttom_hexs[y][x])
+            end
+
+            if hex_info.go then
+                go.delete(hex_info.go)
+            end
+        end
+    end
+end
+
+local function get_hex_info_by_pos(self, pos)
+    for y, hex_infos in pairs(self.hex_infos) do
+        for x, hex_info in pairs(hex_infos) do
+            local hex_pos = get_hex_pos(self, x, y)
+            if vmath.length(hex_pos - pos) <= DETECT_RADIUS then
+                return hex_info
+            end
+        end
+    end
+end
+
+local function on_move_block(self, message, sender)
+    if self.is_lineuping then return end
+
+    local block = Helper.pop_table(message.block_id)
+    local block_pos = message.pos
+    local hex_info = get_hex_info_by_pos(self, block_pos)
+    if hex_info and self.board:can_locate(block, hex_info.x, hex_info.y) then
+        -- record x, y, and block
+        self.block = block
+        self.block_x = hex_info.x
+        self.block_y = hex_info.y
+
+        local pos = get_hex_pos(self, hex_info.x, hex_info.y)
+        pos.z = 0
+        if self.shadow_block then
+            go.set_position(pos, self.shadow_block)
+        else
+            self.shadow_block = factory.create('#block_factory', pos, nil, {alpha = 0.5, need_offset = false})
+            msg.post(self.shadow_block, 'bind', {id = Helper.push_table(block)})
+        end
+    else
+        if self.shadow_block then
+            go.delete(self.shadow_block)
+            self.shadow_block = nil
+        end
+    end
+end
+
+local function do_hex_action(self, a)
+    local op = a.op
+    if op == 'add' then
+        set_hex(self, a.hex, a.x, a.y)
+    elseif op == 'del' then
+        local empty_hex = HexFactory.create(HexType.Empty)
+        set_hex(self, empty_hex, a.x, a.y)
+    elseif op == 'mod' then
+        set_hex(self, a.to, a.x, a.y)
+    end
+end
+
+local function get_score_pos_by_slots(self, slots)
+    local rx, ry, rz = 0, 0, go.get('.', 'position.z')
+    for i, s in ipairs(slots) do
+        local pos = get_hex_pos(self, s.x, s.y)
+        rx = rx + pos.x
+        ry = ry + pos.y
+    end
+
+    return vmath.vector3(rx / #slots, ry / #slots, rz + 0.1)
+end
+
+local function get_score_pos_by_locate_block(self, block, x, y)
+    local rx, ry, rz = 0, 0, go.get('.', 'position.z')
+    for _, s in ipairs(block:get_slots()) do
+        local pos = get_hex_pos(self, s.x + x, s.y + y)
+        rx = rx + pos.x
+        ry = ry + pos.y
+    end
+    return vmath.vector3(rx / block:get_hex_count(), ry / block:get_hex_count(), rz + 0.1)
+end
+
+local function do_lineup_step(self)
+    local step = self.lineup_result:get_curr_step()
+
+    -- access score to manager
+    for _, ev in ipairs(step:get_events()) do
+        if ev.score then
+            local pos = get_score_pos_by_slots(self, ev.slots)
+            msg.post('manager', 'add_score', {pos = pos, score = ev.score})
+        end
+    end
+
+    -- send event to every hex releated
+    local send_hex_event_count = 0
+    for _, ev in ipairs(step:get_events()) do
+        local type, slots, params = ev.type, ev.slots, ev.params
+        for _, s in ipairs(slots) do
+            local hex_go = self.hex_infos[s.y][s.x].go or self.buttom_hexs[s.y][s.x]
+            local message = {type = type, params = params}
+
+            -- arrow hex don't known where and how to play explotion ani
+            if type == 'arrow_bomb' then
+                local x, y, k, b = params.x, params.y, params.k, params.b
+
+                -- scale
+                local slots = self.board:get_kb_slots(k, b)
+                local len = #slots
+                local max_len = self.board:get_size() * 2 - 1
+                local scale = len / max_len
+                message.scale = scale
+
+                -- position
+                local pos = vmath.vector3()
+                for _, s in ipairs(slots) do
+                    local x, y = s.x, s.y
+                    pos = go.get_position(self.buttom_hexs[y][x]) + pos
+                end
+                message.pos = vmath.vector3(pos.x / #slots, pos.y / #slots, pos.z / #slots + 0.1)
+            end
+
+            msg.post(hex_go, 'access_event_request', message)
+            send_hex_event_count = send_hex_event_count + 1
+        end
+    end
+
+    self.send_hex_event_count = send_hex_event_count
+    self.recv_hex_event_count = 0
+end
+
+local function on_lineup_step_end(self)
+    -- now access prev lineup actions
+    local step = self.lineup_result:get_curr_step()
+    local actions = step:get_actions()
+    for _, a in ipairs(actions) do
+        do_hex_action(self, a)
+    end
+
+    -- access next step lineup
+    if not self.lineup_result:has_next_step() then
+        self.is_lineuping = false
+        msg.post('manager', 'check_gameover')
+    else
+        self.lineup_result:increase_step()
+        do_lineup_step(self)
+    end
+end
+
+local function on_do_lineup(self)
+    self.is_lineuping = true
+    Score.access_result(self.lineup_result)
+    self.lineup_result:increase_step()
+    do_lineup_step(self)
+end
+
+local function on_locate_block(self, message, sender)
+    if self.shadow_block and self.board:can_locate(self.block, self.block_x, self.block_y) then
+        -- locate to logic board
+        self.board:locate(self.block, self.block_x, self.block_y)
+
+        -- update self hexs
+        for _, s in ipairs(self.block:get_slots()) do
+            local x, y, hex = s.x, s.y, s.hex
+            set_hex(self, hex, x + self.block_x, y + self.block_y)
+        end
+
+        -- delete the shadow block
+        go.delete(self.shadow_block)
+        self.shadow_block = nil
+
+        msg.post(sender, 'locate_succeed')
+
+        local ok, result = self.board:lineup()
+        if not ok then
+            local score = Score.get_locate_score(self.block)
+            local pos = get_score_pos_by_locate_block(self, self.block, self.block_x, self.block_y)
+            msg.post('manager', 'add_score', {score = score, pos = pos})
+            msg.post('manager', 'check_gameover')
+        else
+            self.lineup_result = result
+            msg.post('.', 'do_lineup')
+        end
+    else
+        msg.post(sender, 'locate_failed')
+    end
+end
+
+local function on_change_hex(self, message, sender)
+    local action = message.action
+    local pos = Helper.action_to_pos(action)
+    local hex_info = get_hex_info_by_pos(self, pos)
+    local hex_type_to = message.hex_type
+
+    if self.is_changing then
+        if action.released then
+            self.is_changing = false
+        else
+            if hex_info then
+                local x, y = hex_info.x, hex_info.y
+                local hex_from = self.board:get_hex(x, y)
+                local hex_to = HexFactory.create(hex_type_to, message.params)
+                if not hex_from:is_equal(hex_to) then
+                    set_hex(self, hex_to, x, y)
+                    self.board:set_hex(hex_to, x, y)
+                end
+            end
+        end
+    else
+        if action.pressed then
+            if hex_info then
+                self.is_changing = true
+                local x, y = hex_info.x, hex_info.y
+                local hex_from = self.board:get_hex(x, y)
+                local hex_to = HexFactory.create(hex_type_to, message.params)
+                if not hex_from:is_equal(hex_to) then
+                    set_hex(self, hex_to, x, y)
+                    self.board:set_hex(hex_to, x, y)
+                end
+            end
+        end
+    end
+end
+
+local function on_bind(self, message)
+    local board = Helper.pop_table(message.id)
+
+    board:foreach_hex_slot(function (s)
+        local hex, x, y = s.hex, s.x, s.y
+        if has_hex(self, x, y) then
+            local self_hex = self.board:get_hex(x, y)
+            if not hex:is_equal(self_hex) or board == self.board then
+                set_hex(self, hex, x, y)
+            end
+        else
+            set_hex(self, hex, x, y)
+        end
+    end)
+
+    local del_record = {}
+    for y, hex_infos in pairs(self.hex_infos) do
+        for x, hex_info in pairs(hex_infos) do
+            if not board:has_hex(x, y) then
+                table.insert(del_record, {x = x, y = y})
+            end
+        end
+    end
+
+    for _, r in ipairs(del_record) do
+        del_hex(self, r.x, r.y)
+    end
+
+    self.board = board
+end
+
+local function on_resize(self, message)
+    local new_size = message.size
+    if self.board:get_size() ~= new_size then
+        self.board:resize(new_size)
+        msg.post('.', 'bind', {id = Helper.push_table(self.board)})
+    end
+end
+
+local function on_clear(self)
+    local empty_hex = HexFactory.create(HexType.Empty)
+    self.board:foreach_hex_slot(function (s)
+        set_hex(self, empty_hex, s.x, s.y)
+    end)
+    self.board:clear()
+end
+
+local function on_access_event_response(self)
+    assert(self.is_lineuping)
+    self.recv_hex_event_count = self.recv_hex_event_count + 1
+    if self.recv_hex_event_count == self.send_hex_event_count then
+        on_lineup_step_end(self)
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('bind') then
+        on_bind(self, message)
+    elseif message_id == hash('resize') then
+        on_resize(self, message)
+    elseif message_id == hash('clear') then
+        on_clear(self)
+    elseif message_id == hash('move_block') then
+        on_move_block(self, message, sender)
+    elseif message_id == hash('locate_block') then
+        on_locate_block(self, message, sender)
+    elseif message_id == hash('do_lineup') then
+        on_do_lineup(self)
+    elseif message_id == hash('access_event_response') then
+        on_access_event_response(self)
+    elseif message_id == hash('change_hex') then
+        on_change_hex(self, message, sender)
+    end
+end

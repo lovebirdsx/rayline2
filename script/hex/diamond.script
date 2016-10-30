@@ -1,0 +1,90 @@
+local Config = require 'lib.config.base'
+
+go.property('lock_count', 0)
+
+local LINEUP_TIME = 0.8
+local LINEUP_INTERVAL = 0.4
+
+function init(self)
+    go.set('#sprite', 'scale', vmath.vector3(Config.HexScale, Config.HexScale, 1))
+    msg.post('#sprite', 'play_animation', {id = hash('diamond' .. self.lock_count)})
+    self.state = 'normal'
+end
+
+function update(self, dt)
+    if self.state == 'lineup' then
+        self.time = self.time + dt
+        if self.time > LINEUP_TIME then
+            self.lock_count = self.lock_count - 1
+            if self.lock_count >= 0 then
+                go.set('#sprite', 'tint', vmath.vector4(1))
+                msg.post('#sprite', 'play_animation', {id = hash('diamond' .. self.lock_count)})
+                self.state = 'normal'
+            else
+                msg.post('#sprite', 'disable')
+                self.state = 'over'
+            end
+
+            msg.post(self.access_event_sender, 'access_event_response')
+        else
+            local da = dt / LINEUP_INTERVAL * self.lineup_dir
+            local a = self.color_w + da
+
+            if self.lineup_dir > 0 then
+                if a > 1 then
+                    a = -(a - 1)
+                    self.lineup_dir = -1
+                end
+            else
+                if a < 0 then
+                    a = -a
+                    self.lineup_dir = 1
+                end
+            end
+
+            self.color_w = a
+            local c = 0.5 * a + 0.5
+            go.set('#sprite', 'tint', vmath.vector4(c, c, c, 1))
+        end
+    elseif self.state == 'arrowup' then
+        self.time = self.time + dt
+        if self.time > 0.2 then
+            self.lock_count = self.lock_count - 1
+            if self.lock_count >= 0 then
+                msg.post('#sprite', 'play_animation', {id = hash('diamond' .. self.lock_count)})
+                self.state = 'normal'
+            else
+                msg.post('#sprite', 'disable')
+                self.state = 'over'
+            end
+            msg.post(self.access_event_sender, 'access_event_response')
+        end
+    end
+end
+
+local function on_access_event(self, message, sender)
+    if self.state ~= 'normal' then
+        msg.post(sender, 'access_event_response')
+        return
+    end
+
+    self.access_event_sender = sender
+    self.time = 0
+
+    local ev_type = message.type
+    if ev_type == 'lineup' then
+        self.lineup_dir = -1
+        self.color_w = 1
+        self.state = 'lineup'
+    elseif ev_type == 'arrowup' then
+        self.state = 'arrowup'
+    else
+        msg.post(sender, 'access_event_response')
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('access_event_request') then
+        on_access_event(self, message, sender)
+    end
+end

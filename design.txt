@@ -1,0 +1,88 @@
+版本1:
+	分析市面上成功的消除类游戏
+		开心消消乐
+			关于增益道具的引导
+			消除动画的爽快感
+			偶尔赠送道具
+			主题的一致性
+				3星分数的表达
+	规划rayline的整体开发
+		核心玩法提升
+			关卡内小目标
+			消除爽快感
+
+		关卡规划
+
+		主题设计
+
+		开发计划
+
+	核心是什么？
+
+	开心消消乐的核心
+		凑特殊方块
+			4个消除
+			5个消除
+			T型消除
+		特殊方块与特殊方块达成合击效果
+			4与5
+			4与T
+			4与4
+			5与T
+			5与5
+			T与T
+		不同的关卡，加入不同类型的方块
+		不同的关卡，有不同的关卡目标
+
+	rayline的核心
+		combo加成
+		同颜色消除加成
+		不同形状的combo 横 竖 交叉
+		不 同数量的combo 2，3，4，5，6，7，8，9
+		怎么做？
+			空想无用，先实现出来，看体验再说！
+			大概的思路：
+				combo产生道具在盘面上
+				combo产生道具的规则必须是简单清晰易懂的
+				道具和道具能够产生合击效果（强化）
+				combo提升，道具强度提升
+			有哪些合适的道具？
+		3星判定机制
+		回合数判定
+
+	hex frvr玩家意见
+		可以有消除相同类型block的道具
+		更大的board
+		延长金币动画的时间（消除多次的时候，没来得及点）
+		加入撤销操作
+		消除反馈
+			https://frvr.useresponse.com/topic/rewards
+			消除2行奖励一个单格子block
+			消除3行能够翻转（左右或上下）block
+			消除4行能够让玩家选择下一次出现的block
+		加入排行榜
+			https://frvr.useresponse.com/topic/hex-frvr-is-addictive-and-i-love-it-so-far-60429
+		游玩的时间过长，能够有限时模式
+			https://frvr.useresponse.com/topic/time-attack-needed
+		道具
+		显示下一个即将入场的block
+			https://frvr.useresponse.com/topic/please-show-the-next-shape
+		用队列显示即将入场的block
+		消除类游戏设计建议
+			https://frvr.useresponse.com/topic/designchallengewhere-to-go
+
+版本2:
+	核心设计方向
+		连消
+			消除类型：横向 斜向 X
+			Combo数：2,3,4,5,6,7,8,9
+		收集
+			水火木光暗
+		养成
+			类似dota传奇的养成
+	内容
+		战斗设计
+		战斗实现
+		养成设计
+		养成实现
+	计划

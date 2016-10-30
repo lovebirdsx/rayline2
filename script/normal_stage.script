@@ -1,0 +1,99 @@
+local NormalStage = require 'lib.play.stage.normal'
+local Helper = require 'lib.common.helper'
+
+go.property('path', hash('normal_stage.save'))
+go.property('board_size', 5)
+
+Helper.reg_str('normal_stage.save')
+
+local function sync(self)
+    msg.post('gui', 'update_score', {score = self.stage:get_score()})
+    msg.post('gui', 'update_best_score', {best_score = self.stage:get_high_score()})
+    msg.post('board', 'bind', {id = Helper.push_table(self.stage:get_board())})
+    msg.post('inserter', 'bind', {id = Helper.push_table(self.stage:get_inserter())})
+end
+
+function init(self)
+    self.stage = NormalStage()
+    self.stage:get_board():resize(self.board_size)
+    msg.post('board', 'resize', {size = self.board_size})
+
+    msg.post('.', 'load')
+    msg.post('.', 'acquire_input_focus')
+end
+
+function final(self)
+    msg.post('.', 'save')
+    msg.post('.', 'release_input_focus')
+end
+
+local function load(self)
+    local snapshot = Helper.load_table(self.path)
+    if snapshot then
+        self.stage:apply_snapshot(snapshot)
+        msg.post('.', 'check_gameover')
+        sync(self)
+    end
+end
+
+local function save(self)
+    Helper.save_table(self.path, self.stage:gen_snapshot())
+end
+
+local function on_add_score(self, message)
+    local score, pos = message.score, message.pos
+    local from = self.stage:get_score()
+    local to = self.stage:add_score(score)
+
+    msg.post('gui', 'add_score_ani', {score = score, from = from, to = to, pos = pos})
+    if self.stage:is_high_score() then
+        msg.post('gui', 'update_best_score', {best_score = self.stage:get_high_score()})
+    end
+
+    msg.post('.', 'save')
+end
+
+local function on_restart(self)
+    self.stage:restart()
+    sync(self)
+end
+
+local function on_check_gameover(self)
+    if self.stage:is_gameover() then
+        print('game over')
+        msg.post('gui', 'show_gameover')
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('check_gameover') then
+        on_check_gameover(self)
+    elseif message_id == hash('restart') then
+        on_restart(self)
+    elseif message_id == hash('return') then
+        msg.post('.', 'save')
+        msg.post('controller:/loader', 'main_menu')
+    elseif message_id == hash('load') then
+        load(self)
+    elseif message_id == hash('save') then
+        save(self)
+    elseif message_id == hash('add_score') then
+        on_add_score(self, message)
+    end
+end
+
+function on_input(self, action_id, action)
+    if action_id == hash('touch') then
+        if not self.stage:is_gameover() then
+            msg.post('inserter', 'touch', {action = action})
+        end
+        msg.post('gui', 'input', {action_id = action_id, action = action})
+    elseif action_id == hash('debug') then
+        if action.pressed then
+            msg.post('board', 'debug')
+            msg.post('inserter', 'debug')
+        end
+    elseif action_id == hash('exit') then
+        msg.post('.', 'save')
+    end
+end

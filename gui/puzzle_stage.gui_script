@@ -1,0 +1,112 @@
+local Helper = require 'lib.common.helper'
+
+function init(self)
+    self.score = 0
+    self.target_score = 0
+
+    self.t_result = gui.get_node('result')
+
+    gui.set_enabled(self.t_result, false)
+    msg.post('.', 'update_score', {score = 0})
+end
+
+function final(self)
+
+end
+
+function update(self, dt)
+    if self.score < self.target_score then
+        self.score = self.score + self.score_add_speed * dt
+        gui.set_text(gui.get_node('score'), math.floor(self.score))
+        if self.score >= self.target_score then
+            self.score = self.target_score
+        end
+    end
+
+    if self.cm then
+        for i = 1, self.cm:get_condition_count() do
+            local c = self.cm:get_condition(i)
+            local node = gui.get_node('condition' .. i)
+            -- if c:is_ok() then
+            --     gui.set_color(node, vmath.vector4(138 / 255, 255 / 255, 153 / 255, 1))
+            -- end
+            gui.set_text(node, c:get_status_string())
+        end
+    end
+end
+
+local function on_score_ani_down(self, node)
+    gui.delete_node(node)
+end
+
+local function on_add_score_ani(self, message)
+    local score, pos = message.score, message.pos
+    local node = gui.new_text_node(pos, score)
+
+    -- score up ani
+    gui.set_font(node, 'score_pop')
+    gui.set_color(node, vmath.vector3(0.5))
+    gui.animate(node, 'position.y', pos.y + 150, gui.EASING_LINEAR, 0.5, 0.6, on_score_ani_down, gui.PLAYBACK_ONCE_FORWARD)
+    gui.animate(node, 'scale', 1.2, gui.EASING_LINEAR, 0.2, 0, nil, gui.PLAYBACK_ONCE_PINGPONG)
+    gui.animate(node, 'color', vmath.vector3(1), gui.EASING_LINEAR, 0.2, 0)
+    gui.animate(node, 'color.w', 0, gui.EASING_LINEAR, 1, 0.6)
+
+    -- score add ani
+    local s_node = gui.get_node('score')
+    local add_time = 0.6
+    gui.set_text(s_node, message.to)
+    gui.cancel_animation(s_node, 'scale')
+    gui.animate(s_node, 'scale', 1.6, gui.EASING_LINEAR, add_time, 0, nil, gui.PLAYBACK_ONCE_PINGPONG)
+    local from, to = self.score, message.to
+    self.score_add_speed = (to - from) / add_time
+    self.target_score = to
+end
+
+local function on_update_score(self, message)
+    local score = message.score
+    gui.set_text(gui.get_node('score'), score)
+    self.score = score
+    self.target_score = score
+end
+
+local function on_show_result(self, message)
+    gui.set_enabled(self.t_result, true)
+    gui.set_text(self.t_result, message.text)
+end
+
+local function on_hide_result(self, message)
+    gui.set_enabled(self.t_result, false)
+end
+
+local function on_input(self, action_id, action)
+    if action_id == hash('touch') and action.released then
+        if gui.is_enabled(self.t_result) and gui.pick_node(self.t_result, action.x, action.y) then
+            msg.post('manager', 'show_result_finish')
+        elseif gui.pick_node(gui.get_node('return'), action.x, action.y) then
+            msg.post('manager', 'return')
+        end
+    end
+end
+
+local function on_bind_condition(self, message)
+    local cm = Helper.pop_table(message.id)
+    self.cm = cm
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('input') then
+        on_input(self, message.action_id, message.action)
+    elseif message_id == hash('update_score') then
+        on_update_score(self, message)
+    elseif message_id == hash('add_score_ani') then
+        on_add_score_ani(self, message)
+    elseif message_id == hash('bind_condition') then
+        on_bind_condition(self, message)
+    elseif message_id == hash('show_result') then
+        on_show_result(self, message)
+    elseif message_id == hash('hide_result') then
+        on_hide_result(self, message)
+    else
+        print('unkonw puzzle_stage.gui message', message_id)
+    end
+end

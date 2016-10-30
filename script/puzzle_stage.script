@@ -1,0 +1,95 @@
+local PuzzleStage = require 'lib.play.stage.puzzle'
+local PuzzleLoader = require 'lib.play.stage.puzzle_loader'
+local Helper = require 'lib.common.helper'
+local Record = require 'lib.play.record'
+
+go.property('test', true)
+
+function init(self)
+    msg.post('.', 'load')
+    msg.post('.', 'acquire_input_focus')
+end
+
+function final(self)
+    msg.post('.', 'release_input_focus')
+end
+
+local function load(self)
+    if self.test then
+        self.stage = PuzzleLoader.load_from_sv(Record.instance():get_select_puzzle_path())
+    else
+        self.stage = PuzzleLoader.load_res(Record.instance():get_select_puzzle_path())
+    end
+    msg.post('board', 'bind', {id = Helper.push_table(self.stage:get_board())})
+    msg.post('inserter', 'bind', {id = Helper.push_table(self.stage:get_inserter())})
+    msg.post('gui', 'bind_condition', {id = Helper.push_table(self.stage:get_condition_manager())})
+
+    msg.post('.', 'check_gameover')
+end
+
+local function on_add_score(self, message)
+    local score, pos = message.score, message.pos
+    local from = self.stage:get_score()
+    local to = self.stage:add_score(score)
+
+    msg.post('gui', 'add_score_ani', {score = score, from = from, to = to, pos = pos})
+end
+
+local function on_check_gameover(self)
+    if self.stage:is_ok() then
+        msg.post('gui', 'show_result', {text = 'Passed'})
+    elseif self.stage:is_failed() then
+        msg.post('gui', 'show_result', {text = 'Failed'})
+    end
+end
+
+local function on_show_result_finish(self)
+    if self.stage:is_ok() then
+        local record = Record.instance()
+        record:complete_current_stg()
+        record:save()
+        msg.post('.', 'return')
+    elseif self.stage:is_failed() then
+        msg.post('gui', 'hide_result')
+        msg.post('.', 'load')
+    end
+end
+
+local function on_return(self)
+    if self.test then
+        msg.post('controller:/loader', 'editor')
+    else
+        msg.post('controller:/loader', 'stage_select', {
+            ['/manager'] = {test = false}
+        })
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('check_gameover') then
+        on_check_gameover(self)
+    elseif message_id == hash('show_result_finish') then
+        on_show_result_finish(self)
+    elseif message_id == hash('add_score') then
+        on_add_score(self, message)
+    elseif message_id == hash('return') then
+        on_return(self)
+    elseif message_id == hash('load') then
+        load(self)
+    else
+        print('puzzle_stage ignore msg', message_id)
+    end
+end
+
+function on_input(self, action_id, action)
+    if action_id == hash('touch') then
+        if not self.stage:is_end() then
+            msg.post('inserter', 'touch', {action = action})
+        end
+        msg.post('gui', 'input', {action_id = action_id, action = action})
+    elseif action_id == hash('debug') then
+        if action.pressed then
+            msg.post('board', 'debug')
+        end
+    end
+end

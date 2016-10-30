@@ -1,0 +1,63 @@
+local Config = require 'lib.config.base'
+
+go.property('lineup_time', 0.8)
+go.property('lineup_interval', 0.4)
+
+function init(self)
+	self.color = vmath.vector4(77/255, 77/255, 77/255, 1)
+    sprite.set_constant('#sprite', 'tint', self.color)
+	go.set('#sprite', 'scale', vmath.vector3(Config.HexScale, Config.HexScale, 1))
+end
+
+function update(self, dt)
+	if self.is_lineup then
+		self.time = self.time + dt
+		if self.time > self.lineup_time then
+			self.color_w = 0
+			self.is_lineup = false
+			msg.post(self.access_event_sender, 'access_event_response')
+		else
+			local da = dt / self.lineup_interval * self.lineup_dir
+			local a = self.color_w + da
+
+			if self.lineup_dir > 0 then
+				if a > 1 then
+					a = -(a - 1)
+					self.lineup_dir = -1
+				end
+			else
+				if a < 0 then
+					a = -a
+					self.lineup_dir = 1
+				end
+			end
+
+			self.color_w = a
+		end
+
+		local c = vmath.vector4(self.color)
+		c.x = (1 - c.x) * self.color_w + c.x
+		c.y = (1 - c.y) * self.color_w + c.y
+		c.z = (1 - c.z) * self.color_w + c.z
+		go.set('#sprite', 'tint', c)
+	end
+end
+
+local function on_access_event(self, message, sender)
+	local ev_type = message.type
+	if ev_type == 'lineup' then
+		self.access_event_sender = sender
+		self.is_lineup = true
+		self.time = 0
+		self.lineup_dir = -1
+		self.color_w = 1
+	else
+		msg.post(sender, 'access_event_response')
+	end
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash('access_event_request') then
+		on_access_event(self, message, sender)
+	end
+end

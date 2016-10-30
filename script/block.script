@@ -1,0 +1,104 @@
+local NormalBlock = require 'lib.play.block.block'
+local Config = require 'lib.config.base'
+local Helper = require 'lib.common.helper'
+
+go.property('alpha', 1)
+go.property('need_offset', true)
+
+function init(self)
+    self.hexs = {}
+end
+
+function final(self)
+    go.delete_all(self.hexs)
+end
+
+local function on_bind(self, message)
+    assert(#self.hexs == 0)
+
+    local block = Helper.pop_table(message.id)
+
+    local scale = go.get_scale()
+    local w = math.floor(Config.HexWidth / 2 * scale)
+    local h = math.floor(Config.HexHeight / 2 * scale)
+
+    local self_pos = go.get_world_position()
+    local sx, sy, sz = self_pos.x, self_pos.y, self_pos.z
+
+    local offset
+    if self.need_offset then
+        offset = Helper.get_block_center_offset(block, scale)
+    else
+        offset = vmath.vector3()
+    end
+
+    for _, s in ipairs(block:get_slots()) do
+        local x = w * s.x  + sx
+        local y = h * s.y  + sy
+        local z = sz
+
+        local properties = s.hex:get_properties()
+
+        local hex = factory.create('#normal_hex_factory', vmath.vector3(x, y, z) + offset, nil, properties)
+        msg.post(hex, 'set_alpha', {alpha = self.alpha})
+        msg.post(hex, 'set_parent', {parent_id = go.get_id()})
+
+        table.insert(self.hexs, hex)
+    end
+end
+
+local function on_size_up(self)
+    self._move_start_scale = go.get_scale()
+    for _, hex in ipairs(self.hexs) do
+        go.cancel_animations(hex, 'scale')
+        go.animate(hex, 'scale', go.PLAYBACK_ONCE_FORWARD, 0.8, go.EASING_LINEAR, 0.2)
+    end
+
+    go.cancel_animations('.', 'scale')
+    go.animate('.', 'scale', go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, 0.2)
+end
+
+local function on_size_down(self)
+    for _, hex in ipairs(self.hexs) do
+        go.cancel_animations(hex, 'scale')
+        go.animate(hex, 'scale', go.PLAYBACK_ONCE_FORWARD, 1, go.EASING_LINEAR, 0.2)
+    end
+
+    go.cancel_animations('.', 'scale')
+    go.animate('.', 'scale', go.PLAYBACK_ONCE_FORWARD, self._move_start_scale, go.EASING_LINEAR, 0.2)
+end
+
+local function on_add_shadow(self)
+    for _, hex in ipairs(self.hexs) do
+        msg.post(hex, 'add_shadow')
+    end
+end
+
+local function on_remove_shadow(self)
+    for _, hex in ipairs(self.hexs) do
+        msg.post(hex, 'remove_shadow')
+    end
+end
+
+local function on_debug(self)
+    for _, hex in ipairs(self.hexs) do
+        local p = go.get_position(hex)
+        print(p)
+    end
+end
+
+function on_message(self, message_id, message, sender)
+    if message_id == hash('bind') then
+        on_bind(self, message)
+    elseif message_id == hash('size_up') then
+        on_size_up(self)
+    elseif message_id == hash('size_down') then
+        on_size_down(self)
+    elseif message_id == hash('add_shadow') then
+        on_add_shadow(self)
+    elseif message_id == hash('remove_shadow') then
+        on_remove_shadow(self)
+    elseif message_id == hash('debug') then
+        on_debug(self)
+    end
+end
