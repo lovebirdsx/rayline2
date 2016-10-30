@@ -17,6 +17,7 @@ embedded_components {
   id: "normal_hex_factory"
   type: "factory"
   data: "prototype: \"/go/hex/normal.go\"\n"
+  ""
   position {
     x: 0.0
     y: 0.0

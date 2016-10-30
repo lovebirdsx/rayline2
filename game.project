@@ -1,5 +1,5 @@
 [project]
-title = rayline
+title = rayline2
 version = 0.1
 write_log = 0
 dependencies = 
@@ -21,13 +21,13 @@ variable_dt = 0
 dynamic_orientation = 0
 
 [tracking]
-app_id = lovebird.rayline
+app_id = lovebird.rayline2
 
 [osx]
 bundle_identifier = example.unnamed
 
 [ios]
-bundle_identifier = lovebird.rayline
+bundle_identifier = lovebird.rayline2
 app_icon_120x120 = 
 app_icon_180x180 = /res/icon/app_icon180x180.png
 launch_image_640x1136 = /res/image/lauch_640X1136.png

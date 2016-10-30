@@ -1,0 +1,28 @@
+{
+	"build_systems":
+	[
+		{
+			"cmd":
+			[
+				"/usr/local/bin/lua",
+				"lib/test/$file_name"
+			],
+			"file_regex": "^(?:lua:)?[\t ](...*?):([0-9]*):?([0-9]*)",
+			"name": "lua51",
+			"selector": "source.lua",
+			"working_dir": "$folder"
+		}
+	],
+	"folders":
+	[
+		{
+			"folder_exclude_patterns":
+			[
+				".internal",
+				"build",
+				"scene"
+			],
+			"path": "."
+		}
+	]
+}
