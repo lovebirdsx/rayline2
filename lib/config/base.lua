@@ -2,9 +2,9 @@ local Config = {}
 
 if go then
 
-Config.HexScale = 0.425
-Config.HexWidth = 64
-Config.HexHeight = 56
+Config.HexScale = 0.425 * 0.8
+Config.HexWidth = 64 * 0.8
+Config.HexHeight = 56 * 0.8
 
 Config.BlockHexScale = 0.575
 Config.SelectorHexScale = 0.5

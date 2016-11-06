@@ -19,8 +19,8 @@ local function on_bind(self, message)
     local block = Helper.pop_table(message.id)
 
     local scale = go.get_scale()
-    local w = math.floor(Config.HexWidth / 2 * scale)
-    local h = math.floor(Config.HexHeight / 2 * scale)
+    local w = math.ceil(Config.HexWidth / 2 * scale)
+    local h = math.ceil(Config.HexHeight / 2 * scale)
 
     local self_pos = go.get_world_position()
     local sx, sy, sz = self_pos.x, self_pos.y, self_pos.z

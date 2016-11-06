@@ -90,3 +90,13 @@ function table.tostring(t, indent)
 
     return str(t, 0)
 end
+
+function table.array_to_kv(t, key)
+    local r = {}
+    for _, e in ipairs(t) do
+        assert(e[key], 'no key ' .. key)
+        assert(not r[e[key]], 'duplicate key ' .. key)
+        r[e[key]] = e
+    end
+    return r
+end

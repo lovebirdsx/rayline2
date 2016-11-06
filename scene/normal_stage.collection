@@ -4,7 +4,7 @@ instances {
   prototype: "/go/board.go"
   position {
     x: 320.0
-    y: 480.0
+    y: 360.0
     z: -0.5
   }
   rotation {
@@ -12,14 +12,6 @@ instances {
     y: 0.0
     z: 0.0
     w: 1.0
-  }
-  component_properties {
-    id: "script"
-    properties {
-      id: "size"
-      value: "4.0"
-      type: PROPERTY_TYPE_NUMBER
-    }
   }
   scale3 {
     x: 1.0
@@ -32,7 +24,7 @@ instances {
   prototype: "/go/inserter.go"
   position {
     x: 320.0
-    y: 120.0
+    y: 71.6
     z: 0.5
   }
   rotation {
@@ -50,22 +42,7 @@ instances {
 scale_along_z: 0
 embedded_instances {
   id: "gui"
-  data: "components {\n"
-  "  id: \"gui\"\n"
-  "  component: \"/gui/normal_stage.gui\"\n"
-  "  position {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "  }\n"
-  "  rotation {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "    w: 1.0\n"
-  "  }\n"
-  "}\n"
-  ""
+  data: "components {\n  id: \"gui\"\n  component: \"/gui/stage.gui\"\n  position {\n    x: 0.0\n    y: 0.0\n    z: 0.0\n  }\n  rotation {\n    x: 0.0\n    y: 0.0\n    z: 0.0\n    w: 1.0\n  }\n}\n"
   position {
     x: 0.0
     y: 0.0
@@ -85,22 +62,7 @@ embedded_instances {
 }
 embedded_instances {
   id: "manager"
-  data: "components {\n"
-  "  id: \"script\"\n"
-  "  component: \"/script/normal_stage.script\"\n"
-  "  position {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "  }\n"
-  "  rotation {\n"
-  "    x: 0.0\n"
-  "    y: 0.0\n"
-  "    z: 0.0\n"
-  "    w: 1.0\n"
-  "  }\n"
-  "}\n"
-  ""
+  data: "components {\n  id: \"script\"\n  component: \"/script/normal_stage.script\"\n  position {\n    x: 0.0\n    y: 0.0\n    z: 0.0\n  }\n  rotation {\n    x: 0.0\n    y: 0.0\n    z: 0.0\n    w: 1.0\n  }\n}\n"
   position {
     x: 0.0
     y: 0.0
